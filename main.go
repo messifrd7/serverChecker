@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -8,7 +9,8 @@ import (
 	"github.com/fatih/color"
 )
 
-const SleepTime = 10
+const SleepTime = 60
+const QuarantineTicker = 10
 
 func main() {
 	savelog()
@@ -21,22 +23,42 @@ func main() {
 	ticker := time.NewTicker(time.Second * SleepTime)
 	for _ = range ticker.C {
 		for _, server := range servers {
-			checkURL(server.URL)
-			time.Sleep(time.Millisecond * 3000)
+			color.Green(server.URL)
+			err := checkURL(server.URL)
+			if err != nil {
+				go quarantine(server)
+			}
 		}
 	}
 }
-func checkURL(url string) {
+func quarantine(server Server) {
+	var errCount int
+	var iterations int
+	ticker := time.NewTicker(time.Second * QuarantineTicker)
+	for _ = range ticker.C {
+		color.Yellow("quarentene")
+		fmt.Println(iterations)
+		err := checkURL(server.URL)
+		if err != nil {
+			errCount++
+		}
+		iterations++
+
+		if errCount > 3 {
+			color.Red("server error")
+			log.Println("[url]: " + server.URL + " - ERROR: " + err.Error())
+			return
+		}
+		if iterations > 10 {
+			return
+		}
+	}
+}
+func checkURL(url string) error {
 	timeout := time.Duration(1 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
 	}
-	resp, err := client.Get(url)
-	if err != nil {
-		color.Red("[url]:" + url + " - ERROR: " + err.Error())
-		log.Println(err.Error())
-	} else {
-		//log.Println(string(resp.StatusCode) + resp.Status)
-		color.Green("[url]: " + url + " - " + string(resp.StatusCode) + resp.Status)
-	}
+	_, err := client.Get(url)
+	return err
 }
